@@ -86,7 +86,36 @@ for dir in "$TARGET_DIR"/*/; do
     [ -d "$dir/.git" ] && REPOS+=("$dir")
 done
 
-TOTAL=${#REPOS[@]}
+# Apply branch filtering to calculate the actual total
+FILTERED_REPOS=()
+for dir in "${REPOS[@]}"; do
+    cd "$dir" || continue
+
+    latest_commit=$(git for-each-ref --sort=-committerdate \
+        --format="%(refname:short)|%(objectname:short)|%(subject)|%(authorname)|%(committerdate:iso8601)" \
+        refs/remotes/origin/ | head -n 1)
+
+    full_branch=$(echo "$latest_commit" | cut -d'|' -f1)
+    branch=$(git rev-parse --abbrev-ref "$full_branch" 2>/dev/null || echo "$full_branch")
+    branch=$(echo "$branch" | awk '{gsub(/^origin\//, ""); print}')
+
+    # Apply branch filtering
+    if [[ -n "$FILTER_BRANCH" && "$branch" != "$FILTER_BRANCH" ]]; then
+        cd - > /dev/null
+        continue
+    fi
+
+    if [[ -n "$EXCLUDE_BRANCH" && "$branch" == "$EXCLUDE_BRANCH" ]]; then
+        cd - > /dev/null
+        continue
+    fi
+
+    FILTERED_REPOS+=("$dir")
+    cd - > /dev/null
+done
+
+# Update TOTAL to reflect the filtered repositories
+TOTAL=${#FILTERED_REPOS[@]}
 CURRENT=0
 OUTPUT=()
 
@@ -102,18 +131,16 @@ show_progress() {
 }
 
 # Extract latest commit info per repo
-for dir in "${REPOS[@]}"; do
+for dir in "${FILTERED_REPOS[@]}"; do
     cd "$dir" || continue
 
     repo_name=$(basename "$(pwd)")
     git fetch --quiet --all
 
-    # Get the latest commit details
     latest_commit=$(git for-each-ref --sort=-committerdate \
         --format="%(refname:short)|%(objectname:short)|%(subject)|%(authorname)|%(committerdate:iso8601)" \
         refs/remotes/origin/ | head -n 1)
 
-    # Extract branch name using git rev-parse to ensure accuracy
     full_branch=$(echo "$latest_commit" | cut -d'|' -f1)
     branch=$(git rev-parse --abbrev-ref "$full_branch" 2>/dev/null || echo "$full_branch")
     branch=$(echo "$branch" | awk '{gsub(/^origin\//, ""); print}')
@@ -123,17 +150,6 @@ for dir in "${REPOS[@]}"; do
     commit_datetime=$(echo "$latest_commit" | cut -d'|' -f5)
     commit_date=$(date -d "$commit_datetime" "+%Y-%m-%d %H:%M")
 
-    # Apply branch filtering
-    if [[ -n "$FILTER_BRANCH" && "$branch" != "$FILTER_BRANCH" ]]; then
-        cd - > /dev/null
-        continue
-    fi
-
-    if [[ -n "$EXCLUDE_BRANCH" && "$branch" == "$EXCLUDE_BRANCH" ]]; then
-        cd - > /dev/null
-        continue
-    fi
-
     # Store full record with sortable date
     OUTPUT+=("$repo_name|$branch|$commit_hash - $commit_title ($author_name)|$commit_date")
 
@@ -141,6 +157,9 @@ for dir in "${REPOS[@]}"; do
     CURRENT=$((CURRENT + 1))
     show_progress
 done
+
+# Ensure the progress bar reaches 100%
+show_progress
 
 echo -e "\n\nFormatted Output:\n"
 
