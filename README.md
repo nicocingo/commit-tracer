@@ -9,7 +9,7 @@
 
 ## 📸 Screenshots
 
-![Example](images\exampledb.png)
+![Example](./images/exampledb.png)
 > The image above shows the output of the script executed on a folder called DB.
 ---
 
