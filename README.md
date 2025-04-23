@@ -31,8 +31,8 @@ Clone the repo and run the installer:
 ```bash
 git clone https://github.com/nicocingo/commit-tracer.git
 cd commit-tracer
-chmod +x install-commit-tracer.sh
-./install-commit-tracer.sh
+chmod +x install.sh
+./install.sh
 ```
 
 This will install the script on ```/usr/local/bin ``` path.
